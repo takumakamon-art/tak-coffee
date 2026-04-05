@@ -18,19 +18,23 @@
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
-      overflow-x: hidden; /* 横スクロールを防止 */
+      overflow-x: hidden;
     }
     .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
     .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
     input, textarea, select { -webkit-user-select: auto; user-select: auto; }
+    .timer-font { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useMemo } = React;
 
+    // --- アイコン群 ---
     const Icons = {
       Coffee: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>,
       Droplets: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7 2.99 7 2.99s-2.29 6.07-2.29 6.07A4.46 4.46 0 0 0 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/></svg>,
@@ -42,74 +46,136 @@
       Activity: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
       Compass: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>,
       Loader2: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
-      Trash: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+      Trash: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>,
+      Copy: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>,
+      Download: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>,
+      Upload: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>,
+      Edit: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>,
+      Play: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>,
+      Pause: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>,
+      Flag: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>,
+      Reset: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>,
+      ChevronDown: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>,
+      ChevronUp: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>,
+      Send: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>,
+      Search: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
+      Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>,
+      Close: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
     };
 
-    // PDFの全15件を網羅した初期データ
     const initialLogs = [
-      { id: 15, date: '2026/04/04', time: '14:00', beans: 'ケニアAA', roastery: 'smack', roast: 'ライト', dripper: 'V60', filter: '円錐', beansWeight: 30, waterWeight: 450, temp: 93, grind: 17, score: 4.0, memo: 'クセ少', flavors: [] },
-      { id: 14, date: '2026/04/04', time: '08:30', beans: 'Colombia', roastery: 'Post coffee', roast: 'ライト', dripper: 'Origami', filter: '円錐', beansWeight: 20, waterWeight: 300, temp: 93, grind: 17, score: 4.3, memo: '酸味か', flavors: [] },
-      { id: 13, date: '2026/04/03', time: '07:30', beans: 'キリマンジャロ', roastery: 'smack', roast: 'ライト', dripper: 'Origami', filter: '円錐', beansWeight: 25, waterWeight: 375, temp: 93, grind: 17, score: 4.1, memo: 'まろやか', flavors: [] },
-      { id: 12, date: '2026/04/02', time: '12:50', beans: 'New life blend', roastery: 'Post coffee', roast: 'ダーク', dripper: 'Origami', filter: '円錐', beansWeight: 20, waterWeight: 300, temp: 85, grind: 17, score: 4.2, memo: '深煎り', flavors: [] },
-      { id: 11, date: '2026/04/02', time: '07:40', beans: 'Colombia', roastery: 'Post coffee', roast: 'ライト', dripper: 'Origami', filter: '円錐', beansWeight: 20, waterWeight: 300, temp: 93, grind: 17, score: 4.5, memo: 'フローラル', flavors: [] },
-      { id: 10, date: '2026/03/31', time: '07:40', beans: 'ケニアAA', roastery: 'smack', roast: 'ライト', dripper: 'Origami', filter: '円錐', beansWeight: 20, waterWeight: 300, temp: 93, grind: 17, score: 4.0, memo: '酸味が', flavors: [] },
-      { id: 9, date: '2026/03/29', time: '08:00', beans: 'ケニアAA', roastery: 'smack', roast: 'ライト', dripper: 'Origami', filter: '円錐', beansWeight: 20, waterWeight: 300, temp: 93, grind: 17, score: 4.2, memo: 'まろやか', flavors: [] },
-      { id: 8, date: '2026/03/28', time: '14:20', beans: 'キリマンジャロ', roastery: 'smack', roast: 'ライト', dripper: 'Origami', filter: '円錐', beansWeight: 20, waterWeight: 300, temp: 93, grind: 17, score: 4.2, memo: 'まろやか', flavors: [] },
-      { id: 7, date: '2026/03/28', time: '07:30', beans: 'キリマンジャロ', roastery: 'smack', roast: 'ライト', dripper: 'V60', filter: '円錐', beansWeight: 20, waterWeight: 300, temp: 93, grind: 17, score: 4.5, memo: '味がくっきり', flavors: [] },
-      { id: 6, date: '2026/03/27', time: '15:10', beans: 'キリマンジャロ', roastery: 'smack', roast: 'ライト', dripper: 'Origami', filter: '円錐', beansWeight: 20, waterWeight: 300, temp: 93, grind: 17, score: 4.1, memo: '酸味が', flavors: [] },
-      { id: 5, date: '2026/03/27', time: '08:30', beans: 'キリマンジャロ', roastery: 'smack', roast: 'ライト', dripper: 'Origami', filter: 'ウェーブ', beansWeight: 20, waterWeight: 300, temp: 93, grind: 19, score: 4.0, memo: '酸味と', flavors: [] },
-      { id: 4, date: '2026/03/26', time: '12:45', beans: 'キリマンジャロ', roastery: 'smack', roast: 'ライト', dripper: 'Origami', filter: '円錐', beansWeight: 20, waterWeight: 300, temp: 93, grind: 17, score: 4.3, memo: 'あっさり', flavors: [] },
-      { id: 3, date: '2026/03/26', time: '08:00', beans: 'キリマンジャロ', roastery: 'smack', roast: 'ライト', dripper: 'Origami', filter: 'ウェーブ', beansWeight: 20, waterWeight: 300, temp: 93, grind: 18, score: 4.1, memo: '少し雑', flavors: [] },
-      { id: 2, date: '2026/03/22', time: '16:00', beans: 'ルワンダ', roastery: 'PostCoffee', roast: 'ライト', dripper: 'Origami', filter: '円錐', beansWeight: 17, waterWeight: 275, temp: 93, grind: 17, score: 4.3, memo: '柑橘系', flavors: [] },
-      { id: 1, date: '2026/03/22', time: '07:45', beans: 'コロンビア', roastery: '珈琲問屋', roast: 'ライト', dripper: 'Origami', filter: '円錐', beansWeight: 20, waterWeight: 300, temp: 93, grind: 17, score: 4.0, memo: '雑味かが', flavors: [] },
+      { id: 15, date: '2026/04/04', time: '14:00', beans: 'ケニアAA', roastery: 'smack', roast: 'ライト', dripper: 'V60', filter: '円錐', beansWeight: 30, waterWeight: 450, temp: 93, grind: 17, score: 4.0, memo: 'クセ少', flavors: [], summary: 'クセが少なく平坦' },
+      { id: 14, date: '2026/04/04', time: '08:30', beans: 'Colombia', roastery: 'Post coffee', roast: 'ライト', dripper: 'Origami', filter: '円錐', beansWeight: 20, waterWeight: 300, temp: 93, grind: 17, score: 4.3, memo: '酸味か', flavors: ['フルーティー'], summary: '綺麗なフルーティー酸味' },
+      { id: 13, date: '2026/04/03', time: '07:30', beans: 'キリマンジャロ', roastery: 'smack', roast: 'ライト', dripper: 'Origami', filter: '円錐', beansWeight: 25, waterWeight: 375, temp: 93, grind: 17, score: 4.1, memo: 'まろやか', flavors: [], summary: 'まろやかな仕上がり' },
+      { id: 12, date: '2026/04/02', time: '12:50', beans: 'New life blend', roastery: 'Post coffee', roast: 'ダーク', dripper: 'Origami', filter: '円錐', beansWeight: 20, waterWeight: 300, temp: 85, grind: 17, score: 4.2, memo: '深煎り', flavors: ['チョコレート'], summary: 'チョコ系の深いコク' },
+      { id: 11, date: '2026/04/02', time: '07:40', beans: 'Colombia', roastery: 'Post coffee', roast: 'ライト', dripper: 'Origami', filter: '円錐', beansWeight: 20, waterWeight: 300, temp: 93, grind: 17, score: 4.5, memo: 'フローラル', flavors: ['フローラル'], summary: '華やかなフローラル' },
     ];
-
     const FLAVOR_TAGS = ['シトラス', 'ベリー', 'フローラル', 'フルーティー', 'ナッツ', 'チョコレート', 'キャラメル', 'スパイス', 'ハーブ', 'アーシー'];
 
-    // スワイプで削除するためのコンポーネント
+    // --- Gemini API (本物の通信関数) ---
+    const fetchGeminiSummary = async (memo, flavors, apiKey) => {
+      if (!apiKey) return "APIキー未設定";
+      if (!memo && (!flavors || flavors.length === 0)) return "特記事項なし";
+      
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+      const prompt = `以下のコーヒー抽出の感想やフレーバー情報から、10文字以内で端的な要約タイトルを生成してください。出力はカギカッコ無しの要約テキストのみにしてください。\n感想: ${memo}\nフレーバー: ${flavors.join(',')}`;
+      try {
+        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+        const data = await response.json();
+        return data.candidates[0].content.parts[0].text.trim().replace(/['"]/g, '');
+      } catch (err) { return "要約生成エラー"; }
+    };
+
+    const fetchComprehensiveInsight = async (logsData, apiKey) => {
+      if (!apiKey) return "右上の歯車(設定)アイコンから、GeminiのAPIキーを設定してください。\n※APIキーはあなたの端末内にのみ保存され安全です。";
+      if (logsData.length === 0) return "データがありません。";
+      
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+      const logsSummary = logsData.map(l => `${l.beans}(${l.roast}): ${l.dripper}+${l.filter}, ${l.temp}℃, 挽き目${l.grind}, 評価${l.score}`).join('\n');
+      const prompt = `あなたはプロのコーヒー分析AIです。以下の過去の抽出データから、好みの傾向、うまくいくパターンの法則、一般的なセオリーと比較した特徴を200文字程度のレポート形式でまとめてください。\n\n${logsSummary}`;
+      try {
+        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+        const data = await response.json();
+        return data.candidates[0].content.parts[0].text.trim();
+      } catch (err) { return "分析レポートの生成に失敗しました。APIキーが正しいか確認してください。"; }
+    };
+
+    const fetchChatReply = async (message, logsData, apiKey) => {
+      if (!apiKey) return "APIキーが設定されていません。右上の歯車アイコンから設定をお願いします。";
+      
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+      const logsSummary = logsData.slice(0, 10).map(l => `${l.beans}(${l.roast}): ${l.dripper}+${l.filter}, ${l.temp}℃, 挽き目${l.grind}, 評価${l.score}, 感想:${l.summary}`).join('\n');
+      const prompt = `あなたはプロのコーヒーバリスタAIです。以下のユーザーの抽出傾向を踏まえて、質問「${message}」に簡潔なアドバイスを返答してください（150文字程度）。\n\n${logsSummary}`;
+      try {
+        const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+        const data = await response.json();
+        return data.candidates[0].content.parts[0].text.trim();
+      } catch (err) { return "エラーが発生しました。APIキーが正しいか確認してください。"; }
+    };
+
+    const fetchGeminiRecipe = async (recipeInput, apiKey) => {
+      if (!apiKey) throw new Error("APIキーが未設定です");
+      
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+      const prompt = `
+        あなたはプロのバリスタAIです。以下の条件から最適なコーヒー抽出レシピをJSON形式で提案してください。
+        【条件】
+        豆: ${recipeInput.beans || "おまかせ"}
+        焙煎度: ${recipeInput.roast || "おまかせ"}
+        ドリッパー: ${recipeInput.dripper || "おまかせ"}
+        フィルター: ${recipeInput.filter || "おまかせ"}
+        豆の量: ${recipeInput.beansWeight ? recipeInput.beansWeight + "g" : "15g"}
+        味の希望: ${recipeInput.tasteGoal || "豆本来の個性を引き出す"}
+        ※挽き目はTimemore C3のクリック数（13〜22程度）で指定してください。
+      `;
+      
+      const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        systemInstruction: { parts: [{ text: "JSON形式で出力。プロパティ: beansWeight(数値), waterWeight(数値), temp(数値), grind(数値), roast(文字列), dripper(文字列), filter(文字列), methodName(文字列: 例「甘み引き出し4投メソッド」), advice(文字列), steps(配列: {time:文字列, water:文字列, description:文字列})" }] },
+        generationConfig: { responseMimeType: "application/json" }
+      };
+
+      const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await response.json();
+      return JSON.parse(data.candidates[0].content.parts[0].text);
+    };
+
+    // --- パース・UIヘルパー ---
+    const parseCSVLine = (text) => {
+      let ret = [], keep = false, item = "";
+      for(let i=0; i<text.length; i++) {
+        let c = text[i];
+        if (c === '"') { if (keep && text[i+1] === '"') { item += '"'; i++; } else { keep = !keep; } }
+        else if (c === ',' && !keep) { ret.push(item); item = ""; }
+        else { item += c; }
+      }
+      ret.push(item); return ret;
+    };
+
     const SwipeToDelete = ({ children, onDelete }) => {
       const [currentX, setCurrentX] = useState(0);
       const [isDragging, setIsDragging] = useState(false);
       const startX = useRef(0);
-
-      const handleTouchStart = (e) => {
-        startX.current = e.touches[0].clientX;
-        setIsDragging(true);
-      };
-      
+      const handleTouchStart = (e) => { startX.current = e.touches[0].clientX; setIsDragging(true); };
       const handleTouchMove = (e) => {
         if (!isDragging) return;
         const diff = e.touches[0].clientX - startX.current;
-        if (diff < 0) { // 左方向のみ許可
-          setCurrentX(Math.max(diff, -100)); // 最大100pxまでスライド
-        }
+        if (diff < 0) setCurrentX(Math.max(diff, -100));
       };
-      
       const handleTouchEnd = () => {
         setIsDragging(false);
-        if (currentX <= -70) {
-          if(window.confirm('この記録を削除しますか？')) {
-            onDelete();
-          }
-        }
-        setCurrentX(0); // 削除後・キャンセル後は元の位置に戻す
+        if (currentX <= -70) { if(window.confirm('この記録を削除しますか？')) onDelete(); }
+        setCurrentX(0);
       };
-
       return (
-        <div className="relative mb-4 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-red-500">
+        <div className="relative mb-4 rounded-xl overflow-hidden shadow-sm bg-red-500">
           <div className="absolute inset-0 flex items-center justify-end pr-6 text-white font-bold" style={{zIndex: 0}}>
             <span className="flex items-center gap-1"><Icons.Trash /> 削除</span>
           </div>
           <div 
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            className="bg-white p-4 relative w-full h-full rounded-xl"
-            style={{ 
-              transform: `translateX(${currentX}px)`, 
-              transition: isDragging ? 'none' : 'transform 0.3s ease-out',
-              zIndex: 1
-            }}
+            onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
+            className="bg-white relative w-full h-full rounded-xl"
+            style={{ transform: `translateX(${currentX}px)`, transition: isDragging ? 'none' : 'transform 0.3s ease-out', zIndex: 1 }}
           >
             {children}
           </div>
@@ -117,464 +183,430 @@
       );
     };
 
+    // === MAIN APP ===
     function App() {
-      const [activeTab, setActiveTab] = useState('recipe');
+      const [activeTab, setActiveTab] = useState('record');
       const [logs, setLogs] = useState([]);
       const [isLoaded, setIsLoaded] = useState(false);
+      
+      // API KEY ステート
+      const [apiKey, setApiKey] = useState('');
+      const [showSettings, setShowSettings] = useState(false);
 
+      // History ステート
+      const [expandedIds, setExpandedIds] = useState([]);
+      const [editingLogId, setEditingLogId] = useState(null);
+      const [editFormData, setEditFormData] = useState(null);
+      const fileInputRef = useRef(null);
+      const [searchQuery, setSearchQuery] = useState('');
+      const [sortOption, setSortOption] = useState('date-desc');
+      const [filterDripper, setFilterDripper] = useState('all');
+
+      // フォーム・レシピ
+      const [formData, setFormData] = useState({
+        beans: '', roastery: '', roast: 'ライト', dripper: 'Origami', filter: '円錐', 
+        beansWeight: 20, waterWeight: 300, temp: 93, grind: 17, score: 3.0, memo: '', flavors: []
+      });
+      const [recipeInput, setRecipeInput] = useState({ beans: '', roast: '', dripper: '', filter: '', beansWeight: '', tasteGoal: '' });
+      const [suggestedRecipe, setSuggestedRecipe] = useState(null);
+      const [isGenerating, setIsGenerating] = useState(false);
+
+      // タイマー
+      const [time, setTime] = useState(0);
+      const [isRunning, setIsRunning] = useState(false);
+      const [laps, setLaps] = useState([]);
+      const timerRef = useRef(null);
+
+      // チャット
+      const [chatMessages, setChatMessages] = useState([{role: 'assistant', content: 'あなたの抽出傾向についての質問や、お悩みを教えてください。（例: 酸味が強すぎる時はどうすればいい？）'}]);
+      const [chatInput, setChatInput] = useState('');
+      const [isChatting, setIsChatting] = useState(false);
+      const [insightReport, setInsightReport] = useState(null);
+      const chatEndRef = useRef(null);
+
+      // 初期ロード (APIキーとログ)
       useEffect(() => {
+        const savedKey = localStorage.getItem('geminiApiKey');
+        if (savedKey) setApiKey(savedKey);
+
         const savedLogs = localStorage.getItem('brewProfileLogs');
-        if (savedLogs && JSON.parse(savedLogs).length > 0) {
-          setLogs(JSON.parse(savedLogs));
-        } else {
-          setLogs(initialLogs); // データが無い場合や初期化時はPDFの全データをセット
-        }
+        if (savedLogs && JSON.parse(savedLogs).length > 0) setLogs(JSON.parse(savedLogs));
+        else setLogs(initialLogs);
         setIsLoaded(true);
       }, []);
 
       useEffect(() => {
-        if (isLoaded) {
-          localStorage.setItem('brewProfileLogs', JSON.stringify(logs));
-        }
+        if (isLoaded) localStorage.setItem('brewProfileLogs', JSON.stringify(logs));
       }, [logs, isLoaded]);
-      
-      const [formData, setFormData] = useState({
-        beans: '', roastery: '', roast: 'ライト', 
-        dripper: 'Origami', filter: '円錐', 
-        beansWeight: 20, waterWeight: 300, temp: 93, grind: 17, 
-        score: 3.0, memo: '', flavors: []
-      });
 
-      // Recipe用の入力。空文字("")は「おまかせ」として扱う
-      const [recipeInput, setRecipeInput] = useState({
-        beans: '', roast: '', dripper: '', beansWeight: '', tasteGoal: ''
-      });
-      const [suggestedRecipe, setSuggestedRecipe] = useState(null);
-      const [isGenerating, setIsGenerating] = useState(false);
-
-      const handleDeleteLog = (id) => {
-        setLogs(logs.filter(log => log.id !== id));
+      // APIキーの保存
+      const handleSaveApiKey = (e) => {
+        e.preventDefault();
+        localStorage.setItem('geminiApiKey', apiKey);
+        setShowSettings(false);
+        // レポート再生成を促すためクリア
+        setInsightReport(null);
       };
 
-      const generateAIFeedback = (log) => {
-        let title = "";
-        let message = "";
-        if (!log) return { title: "データ不足", message: "記録を追加してください。" };
-        
-        if (log.filter === 'ウェーブ' && log.grind >= 18 && log.score < 4.3) {
-          title = "挽き目とフィルターのバランス";
-          message = "ウェーブフィルター使用時に挽き目が粗めに設定されています。Origamiの抜けの速さと合わさり、未抽出による雑味が出ている可能性があります。次回は挽き目を細かくするか、注ぎをゆっくりにしてみましょう。";
-        } else if (log.beansWeight >= 25 && log.grind <= 17) {
-          title = "バッチサイズに応じたメッシュ調整";
-          message = "粉量が多いですが、挽き目が細かめです。粉の層が厚くなりお湯の抜けが遅延し、過抽出になっているかもしれません。挽き目を少し粗くしてみてください。";
-        } else if (log.score >= 4.3) {
-          title = "ベストプロファイルを発見！";
-          message = `素晴らしい抽出です！現在の「${log.dripper} + ${log.filter} + 挽き目${log.grind} + ${log.temp}℃」のセッティングが、この豆のスイートスポットの可能性が高いです。`;
-        } else {
-          title = "微調整のアドバイス";
-          message = "抽出は安定しています。さらなる甘みを引き出したい場合は、湯温を1〜2℃下げてみるか、1投目の蒸らし時間を長くするアプローチを試してみてください。";
+      // インサイトの自動生成
+      useEffect(() => {
+        if (activeTab === 'insight' && logs.length > 0 && !insightReport) {
+           fetchComprehensiveInsight(logs, apiKey).then(setInsightReport);
         }
-        return { title, message };
+      }, [activeTab, logs, apiKey, insightReport]);
+
+      useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, [chatMessages]);
+
+      // --- タイマー ---
+      useEffect(() => {
+        if (isRunning) timerRef.current = setInterval(() => setTime(prev => prev + 10), 10);
+        else clearInterval(timerRef.current);
+        return () => clearInterval(timerRef.current);
+      }, [isRunning]);
+
+      const formatTime = (ms) => {
+        const mins = Math.floor(ms / 60000).toString().padStart(2, '0');
+        const secs = Math.floor((ms % 60000) / 1000).toString().padStart(2, '0');
+        const millis = Math.floor((ms % 1000) / 10).toString().padStart(2, '0');
+        return `${mins}:${secs}.${millis}`;
       };
+      const formatSplit = (ms) => `+${(ms / 1000).toFixed(1)}s`;
 
-      // オフラインAI: 空欄の項目を推測・補完してレシピを生成
-      const generateOfflineRecipe = () => {
-        setIsGenerating(true);
-        setTimeout(() => {
-          // --- 1. 焙煎度の推測（空欄の場合） ---
-          let finalRoast = recipeInput.roast;
-          if (!finalRoast) {
-            const b = recipeInput.beans;
-            if (b.includes('深') || b.includes('ダーク') || b.includes('マンデリン') || b.includes('ブラジル')) {
-              finalRoast = 'ダーク';
-            } else if (b.includes('浅') || b.includes('ライト') || b.includes('エチオピア') || b.includes('フルーティー')) {
-              finalRoast = 'ライト';
-            } else {
-              finalRoast = 'ミディアム'; // 判別不能な場合のデフォルト
-            }
-          }
-
-          // --- 2. 豆量の推測（空欄の場合） ---
-          let finalWeight = parseInt(recipeInput.beansWeight);
-          if (!finalWeight || isNaN(finalWeight)) {
-            finalWeight = 15; // 1杯分の標準量として15gを提案
-          }
-
-          // --- 3. ドリッパーの推測（空欄の場合） ---
-          let finalDripper = recipeInput.dripper;
-          if (!finalDripper) {
-            if (finalRoast === 'ライト') {
-              finalDripper = 'Origami'; // 抜けがよくフレーバーが際立つ
-            } else if (finalRoast === 'ダーク') {
-              finalDripper = 'Kalita Wave'; // 安定してボディを引き出せる
-            } else {
-              finalDripper = 'Hario V60'; // オールマイティ
-            }
-          }
-
-          // --- 4. 味の希望の推測（空欄の場合） ---
-          let finalTasteGoal = recipeInput.tasteGoal;
-          if (!finalTasteGoal) {
-             if (finalRoast === 'ライト') {
-                finalTasteGoal = "華やかな酸味と香りを最大限に引き出す";
-             } else if (finalRoast === 'ダーク') {
-                finalTasteGoal = "しっかりとしたコクと甘みを引き出す";
-             } else {
-                finalTasteGoal = "豆本来のバランスの良さを引き出す";
-             }
-          }
-
-          // 基本パラメータの計算
-          const ratio = finalRoast === 'ダーク' ? 14 : 15;
-          let targetTemp = finalRoast === 'ダーク' ? 85 : 93;
-          let targetGrind = 17;
-
-          // 味の希望に応じた微調整
-          if (finalTasteGoal.includes('甘') || finalTasteGoal.includes('コク')) {
-            targetTemp -= 2;
-            targetGrind -= 1;
-          } else if (finalTasteGoal.includes('スッキリ') || finalTasteGoal.includes('酸味')) {
-            targetTemp += 1;
-            targetGrind += 1;
-          }
-
-          // アドバイスメッセージの構築
-          let adviceMsg = "";
-          if (!recipeInput.roast || !recipeInput.dripper || !recipeInput.beansWeight || !recipeInput.tasteGoal) {
-            adviceMsg += `【AIによる自動提案】一部情報が未指定だったため、豆の特徴に合わせて最適な条件（${finalRoast} / ${finalDripper} / ${finalWeight}g）を提案しました。\n\n`;
-          }
-          adviceMsg += `目標「${finalTasteGoal}」に近づけるため、基本の1:${ratio}の比率をベースに、湯温を${targetTemp}℃、挽き目を${targetGrind}クリックに調整しました。`;
-
-          setSuggestedRecipe({
-            beansWeight: finalWeight,
-            waterWeight: finalWeight * ratio,
-            temp: targetTemp,
-            grind: targetGrind,
-            roast: finalRoast,
-            dripper: finalDripper,
-            advice: adviceMsg,
-            steps: [
-              { time: "0:00", water: `${Math.round(finalWeight * 2)}g`, description: "全体を均一に濡らし、40秒しっかり蒸らします。" },
-              { time: "0:40", water: `${Math.round(finalWeight * 7)}g`, description: "中心から円を描くように優しく注ぎます。" },
-              { time: "1:20", water: `${Math.round(finalWeight * ratio)}g`, description: "水位が下がりきる前に目標量まで注ぎ切り、抽出完了を待ちます。" }
-            ]
-          });
-          setIsGenerating(false);
-        }, 800); // 考えている風のラグ
+      const handleTimerToggle = () => setIsRunning(!isRunning);
+      const handleTimerLap = () => {
+        const splitTime = time - (laps.length > 0 ? laps[0].time : 0);
+        setLaps([{ id: Date.now(), time: time, split: splitTime }, ...laps]);
       };
+      const handleTimerReset = () => { setIsRunning(false); setTime(0); setLaps([]); };
 
-      const handleSave = () => {
-        if(!formData.beans) {
-          alert("豆の種類を入力してください");
-          return;
+      // --- フィルタ・ソート ---
+      const filteredAndSortedLogs = useMemo(() => {
+        let result = [...logs];
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          result = result.filter(log => log.beans.toLowerCase().includes(q) || log.roastery.toLowerCase().includes(q) || log.memo.toLowerCase().includes(q) || (log.summary && log.summary.toLowerCase().includes(q)));
         }
+        if (filterDripper !== 'all') result = result.filter(log => log.dripper === filterDripper);
+        result.sort((a, b) => {
+          if (sortOption === 'date-desc') return b.id - a.id;
+          if (sortOption === 'date-asc') return a.id - b.id;
+          if (sortOption === 'score-desc') return b.score - a.score;
+          if (sortOption === 'score-asc') return a.score - b.score;
+          return 0;
+        });
+        return result;
+      }, [logs, searchQuery, sortOption, filterDripper]);
+
+      // --- アクション ---
+      const handleSaveRecord = () => {
+        if(!formData.beans) { alert("豆の種類を入力してください"); return; }
+        const newLogId = Date.now();
         const newLog = {
-          ...formData,
-          id: Date.now(),
+          ...formData, id: newLogId,
           date: new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }),
-          time: new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})
+          time: new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'}),
+          summary: apiKey ? '✨ 要約生成中...' : '要約なし (APIキー未設定)'
         };
         setLogs([newLog, ...logs]);
         setActiveTab('history');
-        setFormData({
-          ...formData, beans: '', score: 3.0, memo: '', flavors: []
-        });
+        setFormData({ ...formData, beans: '', score: 3.0, memo: '', flavors: [] });
+        
+        if (apiKey) {
+          fetchGeminiSummary(newLog.memo, newLog.flavors, apiKey).then(summary => {
+            setLogs(prev => prev.map(l => l.id === newLogId ? { ...l, summary } : l));
+          });
+        }
       };
 
-      const handleFlavorToggle = (flavor) => {
+      const handleDeleteLog = (id) => setLogs(logs.filter(log => log.id !== id));
+      const handleEditStart = (log) => { setEditingLogId(log.id); setEditFormData(log); };
+      const handleEditCancel = () => { setEditingLogId(null); setEditFormData(null); };
+      const handleEditSave = async () => {
+        const id = editFormData.id;
+        const originalLog = logs.find(l => l.id === id);
+        let updatedLog = { ...editFormData };
+        if (apiKey && (originalLog.memo !== updatedLog.memo || originalLog.flavors.join() !== updatedLog.flavors.join())) {
+           updatedLog.summary = '✨ 要約再生成中...';
+           setLogs(logs.map(l => l.id === id ? updatedLog : l));
+           setEditingLogId(null);
+           const newSummary = await fetchGeminiSummary(updatedLog.memo, updatedLog.flavors, apiKey);
+           setLogs(prev => prev.map(l => l.id === id ? { ...l, summary: newSummary } : l));
+        } else {
+           setLogs(logs.map(l => l.id === id ? updatedLog : l));
+           setEditingLogId(null);
+        }
+      };
+
+      const handleExportCSV = () => {
+        const headers = ["id", "date", "time", "beans", "roastery", "roast", "dripper", "filter", "beansWeight", "waterWeight", "temp", "grind", "score", "memo", "flavors", "summary"];
+        const csvContent = [headers.join(","), ...logs.map(log => headers.map(h => {
+              let val = log[h];
+              if (h === 'flavors') val = val.join(';');
+              if (typeof val === 'string') return `"${val.replace(/"/g, '""')}"`;
+              return val;
+          }).join(","))].join("\n");
+        const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+        const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob); link.download = "brew_profile.csv"; link.click();
+      };
+
+      const handleImportCSV = (e) => {
+        const file = e.target.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const lines = evt.target.result.split(/\r?\n/).filter(l => l.trim() !== "");
+          if (lines.length < 2) return alert("データがありません");
+          const headers = lines[0].split(",");
+          const newLogs = [];
+          for (let i = 1; i < lines.length; i++) {
+            const matches = parseCSVLine(lines[i]);
+            const obj = {};
+            headers.forEach((h, idx) => {
+              let val = matches[idx] || "";
+              if (['id', 'beansWeight', 'waterWeight', 'temp', 'grind'].includes(h)) val = parseInt(val) || 0;
+              if (h === 'score') val = parseFloat(val) || 0;
+              if (h === 'flavors') val = val ? val.split(';') : [];
+              obj[h] = val;
+            });
+            newLogs.push(obj);
+          }
+          if(window.confirm(`${newLogs.length}件のデータをインポートします。上書きしますか？`)) setLogs(newLogs);
+        };
+        reader.readAsText(file);
+      };
+
+      // 本物のAIレシピ生成
+      const generateAIRecipe = async () => {
+        if (!apiKey) {
+          alert("右上の歯車アイコンから、Gemini APIキーを設定してください。");
+          setShowSettings(true);
+          return;
+        }
+        setIsGenerating(true);
+        try {
+          const recipe = await fetchGeminiRecipe(recipeInput, apiKey);
+          setSuggestedRecipe(recipe);
+        } catch (err) {
+          alert("レシピの生成に失敗しました。APIキーを確認してください。");
+        } finally {
+          setIsGenerating(false);
+        }
+      };
+
+      const applyRecipeToRecord = () => {
+        if(!suggestedRecipe) return;
         setFormData(prev => ({
           ...prev,
-          flavors: prev.flavors.includes(flavor) ? prev.flavors.filter(f => f !== flavor) : [...prev.flavors, flavor]
+          beans: recipeInput.beans || prev.beans,
+          roast: suggestedRecipe.roast || prev.roast,
+          dripper: suggestedRecipe.dripper || prev.dripper,
+          filter: suggestedRecipe.filter || prev.filter,
+          beansWeight: suggestedRecipe.beansWeight,
+          waterWeight: suggestedRecipe.waterWeight,
+          temp: suggestedRecipe.temp,
+          grind: suggestedRecipe.grind
         }));
+        setActiveTab('record');
+      };
+
+      const handleChatSubmit = async (e) => {
+        e.preventDefault();
+        if (!chatInput.trim() || isChatting) return;
+        
+        if (!apiKey) {
+           alert("APIキーを設定してください。");
+           setShowSettings(true);
+           return;
+        }
+
+        const msg = chatInput.trim();
+        setChatMessages(prev => [...prev, {role: 'user', content: msg}]);
+        setChatInput('');
+        setIsChatting(true);
+        
+        const reply = await fetchChatReply(msg, logs, apiKey);
+        setChatMessages(prev => [...prev, {role: 'assistant', content: reply}]);
+        setIsChatting(false);
       };
 
       return (
-        <div className="max-w-md mx-auto bg-[#FDFBF7] min-h-screen font-sans text-[#4A3B32] pb-24 shadow-lg relative">
-          <header className="bg-[#FDFBF7] pt-safe pb-4 px-6 sticky top-0 z-10 border-b border-[#EAE3D5]">
+        <div className="max-w-md mx-auto bg-[#FDFBF7] min-h-screen font-sans text-[#4A3B32] pb-24 shadow-lg relative flex flex-col">
+          
+          {/* APIキー設定モーダル */}
+          {showSettings && (
+            <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl relative animate-in fade-in zoom-in-95">
+                <button onClick={() => setShowSettings(false)} className="absolute top-4 right-4 text-gray-400"><Icons.Close /></button>
+                <h2 className="text-lg font-bold text-[#3E3228] mb-2 flex items-center gap-2"><Icons.Settings /> APIキー設定</h2>
+                <p className="text-xs text-[#8C7A6B] mb-4">Google AI Studioで取得した無料のGemini APIキーを入力してください。キーはご自身のiPhone内にのみ保存されます。</p>
+                <form onSubmit={handleSaveApiKey}>
+                  <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="AIzaSy..." className="w-full border border-[#EAE3D5] p-3 rounded-lg text-sm mb-4 focus:ring-2 focus:ring-[#A67C52]" />
+                  <button type="submit" className="w-full bg-[#A67C52] text-white py-3 rounded-xl font-bold">保存する</button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          <header className="bg-[#FDFBF7] pt-safe pb-4 px-6 sticky top-0 z-20 border-b border-[#EAE3D5] flex-shrink-0 flex justify-between items-center">
             <div className="mt-4 flex items-center gap-2">
               <span className="text-[#A67C52]"><Icons.Coffee /></span>
               <h1 className="text-2xl font-bold tracking-wider text-[#3E3228]">BrewProfile</h1>
             </div>
-            <p className="text-xs text-[#8C7A6B] mt-1">Personal Coffee Diary & AI Assistant</p>
+            <button onClick={() => setShowSettings(true)} className="mt-4 text-[#8C7A6B] p-2 hover:bg-[#EAE3D5] rounded-full transition">
+              <Icons.Settings />
+            </button>
           </header>
 
-          <main className="p-6">
+          <main className="p-6 flex-1 overflow-y-auto no-scrollbar">
             
             {/* === RECORD TAB === */}
             {activeTab === 'record' && (
-              <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <div className="bg-[#3E3228] text-white p-5 rounded-2xl shadow-lg relative overflow-hidden">
+                  <div className="text-center mb-4">
+                    <div className="text-xs text-white/60 font-bold tracking-widest uppercase mb-1">Brew Timer</div>
+                    <div className="text-5xl font-light tracking-wider timer-font">{formatTime(time)}</div>
+                  </div>
+                  <div className="flex justify-center gap-4">
+                    <button onClick={handleTimerReset} className="w-12 h-12 flex items-center justify-center rounded-full bg-white/10 active:bg-white/20 transition-colors"><Icons.Reset /></button>
+                    <button onClick={handleTimerToggle} className={`w-16 h-16 flex items-center justify-center rounded-full transition-all ${isRunning ? 'bg-red-500/90' : 'bg-[#A67C52]'}`}>{isRunning ? <Icons.Pause /> : <Icons.Play />}</button>
+                    <button onClick={handleTimerLap} disabled={!isRunning} className="w-12 h-12 flex items-center justify-center rounded-full bg-white/10 active:bg-white/20 disabled:opacity-50 transition-colors"><Icons.Flag /></button>
+                  </div>
+                  {laps.length > 0 && (
+                    <div className="mt-4 border-t border-white/10 pt-3 max-h-28 overflow-y-auto no-scrollbar text-sm timer-font">
+                      {laps.map((lap, idx) => (
+                        <div key={lap.id} className="flex justify-between items-center text-white/80 py-1.5 px-2 border-b border-white/5">
+                          <span className="w-16 text-xs text-white/50">Lap {laps.length - idx}</span>
+                          <span className="flex-1 text-right">{formatTime(lap.time)}</span>
+                          <span className="w-16 text-right text-xs text-yellow-400/80">{formatSplit(lap.split)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <section className="space-y-4">
-                  <h2 className="text-sm font-bold text-[#8C7A6B] uppercase tracking-widest border-b border-[#EAE3D5] pb-2">Beans</h2>
-                  <input 
-                    type="text" placeholder="豆の種類 (例: コロンビア ピンクブルボン)" 
-                    className="w-full bg-white border border-[#EAE3D5] rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-[#A67C52]"
-                    value={formData.beans} onChange={e => setFormData({...formData, beans: e.target.value})}
-                  />
+                  <input type="text" placeholder="豆の種類 (例: コロンビア ピンクブルボン)" className="w-full bg-white border border-[#EAE3D5] rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-[#A67C52]" value={formData.beans} onChange={e => setFormData({...formData, beans: e.target.value})} />
                   <div className="grid grid-cols-2 gap-3">
-                    <input 
-                      type="text" placeholder="ロースタリー" 
-                      className="w-full bg-white border border-[#EAE3D5] rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]"
-                      value={formData.roastery} onChange={e => setFormData({...formData, roastery: e.target.value})}
-                    />
-                    <select 
-                      className="w-full bg-white border border-[#EAE3D5] rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]"
-                      value={formData.roast} onChange={e => setFormData({...formData, roast: e.target.value})}
-                    >
-                      <option value="ライト">ライトロースト</option>
-                      <option value="ミディアム">ミディアムロースト</option>
-                      <option value="ダーク">ダークロースト</option>
+                    <input type="text" placeholder="ロースタリー" className="w-full bg-white border border-[#EAE3D5] rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]" value={formData.roastery} onChange={e => setFormData({...formData, roastery: e.target.value})} />
+                    <select className="w-full bg-white border border-[#EAE3D5] rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]" value={formData.roast} onChange={e => setFormData({...formData, roast: e.target.value})}>
+                      <option value="ライト">ライト</option><option value="ミディアム">ミディアム</option><option value="ダーク">ダーク</option>
                     </select>
                   </div>
                 </section>
 
                 <section className="space-y-4">
-                  <h2 className="text-sm font-bold text-[#8C7A6B] uppercase tracking-widest border-b border-[#EAE3D5] pb-2">Equipment & Recipe</h2>
                   <div className="grid grid-cols-2 gap-3 mb-3">
-                    <select 
-                      className="w-full bg-white border border-[#EAE3D5] rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]"
-                      value={formData.dripper} onChange={e => setFormData({...formData, dripper: e.target.value})}
-                    >
-                      <option value="Origami">Origami</option>
-                      <option value="V60">Hario V60</option>
-                      <option value="Kalita Wave">Kalita Wave</option>
+                    <select className="w-full bg-white border border-[#EAE3D5] rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]" value={formData.dripper} onChange={e => setFormData({...formData, dripper: e.target.value})}>
+                      <option value="Origami">Origami</option><option value="Hario V60">Hario V60</option><option value="Kalita Wave">Kalita Wave</option>
                     </select>
-                    <select 
-                      className="w-full bg-white border border-[#EAE3D5] rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]"
-                      value={formData.filter} onChange={e => setFormData({...formData, filter: e.target.value})}
-                    >
-                      <option value="円錐">円錐フィルター</option>
-                      <option value="ウェーブ">ウェーブフィルター</option>
+                    <select className="w-full bg-white border border-[#EAE3D5] rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]" value={formData.filter} onChange={e => setFormData({...formData, filter: e.target.value})}>
+                      <option value="円錐">円錐</option><option value="ウェーブ">ウェーブ</option>
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-white p-4 rounded-xl border border-[#EAE3D5]">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs text-[#8C7A6B] flex items-center gap-1"><span className="w-3 h-3"><Icons.Activity/></span> 挽き目</span>
-                        <span className="font-bold">{formData.grind} <span className="text-[10px] font-normal">clicks</span></span>
-                      </div>
+                      <div className="flex justify-between items-center mb-2"><span className="text-xs text-[#8C7A6B]">挽き目 <br/><span className="text-[10px] opacity-70">(Timemore C3)</span></span><span className="font-bold text-lg">{formData.grind}</span></div>
                       <input type="range" min="10" max="30" value={formData.grind} onChange={e => setFormData({...formData, grind: parseInt(e.target.value)})} className="w-full accent-[#A67C52]" />
                     </div>
                     <div className="bg-white p-4 rounded-xl border border-[#EAE3D5]">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs text-[#8C7A6B] flex items-center gap-1"><span className="w-3 h-3"><Icons.Thermometer/></span> 湯温</span>
-                        <span className="font-bold">{formData.temp}<span className="text-[10px] font-normal">℃</span></span>
-                      </div>
+                      <div className="flex justify-between items-center mb-2"><span className="text-xs text-[#8C7A6B]">湯温</span><span className="font-bold text-lg">{formData.temp}℃</span></div>
                       <input type="range" min="80" max="100" value={formData.temp} onChange={e => setFormData({...formData, temp: parseInt(e.target.value)})} className="w-full accent-[#A67C52]" />
                     </div>
                     <div className="bg-white p-4 rounded-xl border border-[#EAE3D5]">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs text-[#8C7A6B]">豆量</span>
-                        <span className="font-bold">{formData.beansWeight}<span className="text-[10px] font-normal">g</span></span>
-                      </div>
+                      <div className="flex justify-between items-center mb-2"><span className="text-xs text-[#8C7A6B]">豆量</span><span className="font-bold text-lg">{formData.beansWeight}g</span></div>
                       <input type="range" min="10" max="40" value={formData.beansWeight} onChange={e => setFormData({...formData, beansWeight: parseInt(e.target.value)})} className="w-full accent-[#A67C52]" />
                     </div>
                     <div className="bg-white p-4 rounded-xl border border-[#EAE3D5]">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs text-[#8C7A6B] flex items-center gap-1"><span className="w-3 h-3"><Icons.Droplets/></span> 湯量</span>
-                        <span className="font-bold">{formData.waterWeight}<span className="text-[10px] font-normal">g</span></span>
-                      </div>
+                      <div className="flex justify-between items-center mb-2"><span className="text-xs text-[#8C7A6B]">湯量</span><span className="font-bold text-lg">{formData.waterWeight}g</span></div>
                       <input type="range" min="150" max="600" step="10" value={formData.waterWeight} onChange={e => setFormData({...formData, waterWeight: parseInt(e.target.value)})} className="w-full accent-[#A67C52]" />
                     </div>
                   </div>
                 </section>
 
                 <section className="space-y-4">
-                  <h2 className="text-sm font-bold text-[#8C7A6B] uppercase tracking-widest border-b border-[#EAE3D5] pb-2">Senses</h2>
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {FLAVOR_TAGS.map(flavor => (
-                      <button 
-                        key={flavor} onClick={() => handleFlavorToggle(flavor)}
-                        className={`px-3 py-1.5 rounded-full text-xs transition-colors border ${formData.flavors.includes(flavor) ? 'bg-[#A67C52] text-white border-[#A67C52]' : 'bg-white text-[#8C7A6B] border-[#EAE3D5]'}`}
-                      >
-                        {flavor}
+                    {FLAVOR_TAGS.map(f => (
+                      <button key={f} onClick={() => setFormData(p => ({...p, flavors: p.flavors.includes(f) ? p.flavors.filter(x=>x!==f) : [...p.flavors, f]}))}
+                        className={`px-3 py-1.5 rounded-full text-xs border ${formData.flavors.includes(f) ? 'bg-[#A67C52] text-white' : 'bg-white text-[#8C7A6B]'}`}>
+                        {f}
                       </button>
                     ))}
                   </div>
                   <div className="bg-white p-4 rounded-xl border border-[#EAE3D5] space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex justify-between items-center">
                       <span className="text-sm text-[#8C7A6B]">総合評価</span>
-                      <div className="flex items-center gap-2">
-                        <span className={`w-5 h-5 ${formData.score >= 4 ? 'text-yellow-500' : 'text-[#D1C7B1]'}`}><Icons.Star /></span>
-                        <span className="font-bold text-lg">{formData.score.toFixed(1)}</span>
-                      </div>
+                      <div className="flex items-center gap-2 text-yellow-500"><Icons.Star /><span className="font-bold text-lg text-[#3E3228]">{formData.score.toFixed(1)}</span></div>
                     </div>
                     <input type="range" min="1" max="5" step="0.1" value={formData.score} onChange={e => setFormData({...formData, score: parseFloat(e.target.value)})} className="w-full accent-yellow-500" />
-                    <textarea 
-                      placeholder="メモ（雑味、酸味の質など）" 
-                      className="w-full bg-[#FDFBF7] border border-[#EAE3D5] rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]"
-                      rows="2" value={formData.memo} onChange={e => setFormData({...formData, memo: e.target.value})}
-                    ></textarea>
+                    <textarea placeholder="メモ（雑味、酸味の質など）" className="w-full bg-[#FDFBF7] border border-[#EAE3D5] rounded-lg p-3 text-sm focus:ring-[#A67C52]" rows="2" value={formData.memo} onChange={e => setFormData({...formData, memo: e.target.value})}></textarea>
                   </div>
                 </section>
-
-                <button 
-                  onClick={handleSave}
-                  className="w-full bg-[#A67C52] hover:bg-[#8B653F] text-white font-bold py-4 rounded-xl shadow-md transition-all active:scale-95 flex justify-center items-center gap-2"
-                >
-                  <span className="w-5 h-5"><Icons.Plus /></span> 記録を保存する
+                <button onClick={handleSaveRecord} className="w-full bg-[#A67C52] hover:bg-[#8B653F] text-white font-bold py-4 rounded-xl shadow-md active:scale-95 flex justify-center items-center gap-2">
+                  <Icons.Plus /> 記録を保存
                 </button>
               </div>
             )}
 
-            {/* === HISTORY TAB === */}
-            {activeTab === 'history' && (
-              <div className="space-y-4 animate-in fade-in duration-300">
-                <div className="flex justify-between items-end border-b border-[#EAE3D5] pb-2 mb-4">
-                  <h2 className="text-sm font-bold text-[#8C7A6B] uppercase tracking-widest">Brewing History</h2>
-                  <div className="text-xs text-[#8C7A6B]">全 {logs.length} 件 (左スワイプで削除)</div>
-                </div>
-                
-                {logs.length === 0 ? <p className="text-center text-[#8C7A6B] py-10">まだ記録がありません</p> : logs.map((log) => (
-                  <SwipeToDelete key={log.id} onDelete={() => handleDeleteLog(log.id)}>
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <div className="text-xs text-[#8C7A6B] mb-1">{log.date} {log.time}</div>
-                        <h3 className="font-bold text-lg leading-tight">{log.beans}</h3>
-                        <div className="text-xs text-[#A67C52] mt-0.5">{log.roastery} / {log.roast}</div>
-                      </div>
-                      <div className="flex items-center gap-1 bg-[#FDFBF7] px-2 py-1 rounded-lg border border-[#EAE3D5]">
-                        <span className="w-3 h-3 text-yellow-500"><Icons.Star /></span>
-                        <span className="font-bold text-sm">{log.score.toFixed(1)}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 gap-2 my-3 bg-[#FDFBF7] p-2 rounded-lg border border-[#EAE3D5]">
-                      <div className="text-center">
-                        <div className="text-[10px] text-[#8C7A6B]">Ratio</div>
-                        <div className="text-xs font-semibold">1:{Math.round(log.waterWeight/log.beansWeight)}</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-[10px] text-[#8C7A6B]">Temp</div>
-                        <div className="text-xs font-semibold">{log.temp}℃</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-[10px] text-[#8C7A6B]">Grind</div>
-                        <div className="text-xs font-semibold">{log.grind}</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-[10px] text-[#8C7A6B]">Filter</div>
-                        <div className="text-xs font-semibold truncate px-1">{log.filter}</div>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-end">
-                      <div className="flex flex-wrap gap-1">
-                        <span className="text-[10px] font-semibold bg-[#EAE3D5] text-[#4A3B32] px-2 py-0.5 rounded-md">{log.dripper}</span>
-                        {log.flavors && log.flavors.map(f => (
-                          <span key={f} className="text-[10px] bg-white border border-[#EAE3D5] text-[#A67C52] px-2 py-0.5 rounded-full">{f}</span>
-                        ))}
-                      </div>
-                      <span className="text-xs text-[#8C7A6B] italic ml-2 truncate max-w-[120px]">"{log.memo}"</span>
-                    </div>
-                  </SwipeToDelete>
-                ))}
-              </div>
-            )}
-
-            {/* === RECIPE GENERATOR TAB === */}
+            {/* === RECIPE GENERATOR TAB (AI対応) === */}
             {activeTab === 'recipe' && (
               <div className="space-y-6 animate-in fade-in duration-300">
-                <div className="mb-2">
-                  <h2 className="text-sm font-bold text-[#8C7A6B] uppercase tracking-widest border-b border-[#EAE3D5] pb-2">AI Recipe Generator</h2>
-                  <p className="text-xs text-[#8C7A6B] mt-2">入力できる範囲で条件を入力してください。空欄（おまかせ）の項目は、AIが豆の特徴に合わせて最適な設定を推測・提案します。</p>
-                </div>
-
                 <div className="space-y-4 bg-white p-5 rounded-xl border border-[#EAE3D5] shadow-sm">
-                  <div>
-                    <label className="text-xs font-bold text-[#8C7A6B] mb-1 block">豆の情報（※ここだけは入力してください）</label>
-                    <input 
-                      type="text" placeholder="例: エチオピア イルガチェフェ 浅煎り" 
-                      className="w-full bg-[#FDFBF7] border border-[#EAE3D5] rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]"
-                      value={recipeInput.beans} onChange={e => setRecipeInput({...recipeInput, beans: e.target.value})}
-                    />
+                  <input type="text" placeholder="豆の種類 (例: エチオピア 浅煎り)" className="w-full bg-[#FDFBF7] border border-[#EAE3D5] rounded-xl p-3 text-sm focus:ring-[#A67C52]" value={recipeInput.beans} onChange={e => setRecipeInput({...recipeInput, beans: e.target.value})} />
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <select className="w-full bg-[#FDFBF7] border rounded-xl p-3 text-sm text-[#4A3B32]" value={recipeInput.roast} onChange={e => setRecipeInput({...recipeInput, roast: e.target.value})}>
+                      <option value="">焙煎度: おまかせ</option><option value="ライト">ライト</option><option value="ミディアム">ミディアム</option><option value="ダーク">ダーク</option>
+                    </select>
+                    <select className="w-full bg-[#FDFBF7] border rounded-xl p-3 text-sm text-[#4A3B32]" value={recipeInput.dripper} onChange={e => setRecipeInput({...recipeInput, dripper: e.target.value})}>
+                      <option value="">器具: おまかせ</option><option value="Origami">Origami</option><option value="Hario V60">Hario V60</option><option value="Kalita Wave">Kalita Wave</option>
+                    </select>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <select 
-                      className="w-full bg-[#FDFBF7] border border-[#EAE3D5] rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]"
-                      value={recipeInput.roast} onChange={e => setRecipeInput({...recipeInput, roast: e.target.value})}
-                    >
-                      <option value="">焙煎度: おまかせ</option>
-                      <option value="ライト">ライトロースト</option>
-                      <option value="ミディアム">ミディアムロースト</option>
-                      <option value="ダーク">ダークロースト</option>
+                    <select className="w-full bg-[#FDFBF7] border rounded-xl p-3 text-sm text-[#4A3B32]" value={recipeInput.filter} onChange={e => setRecipeInput({...recipeInput, filter: e.target.value})}>
+                      <option value="">フィルター: おまかせ</option><option value="円錐">円錐</option><option value="ウェーブ">ウェーブ</option>
                     </select>
-                    <select 
-                      className="w-full bg-[#FDFBF7] border border-[#EAE3D5] rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]"
-                      value={recipeInput.dripper} onChange={e => setRecipeInput({...recipeInput, dripper: e.target.value})}
-                    >
-                      <option value="">器具: おまかせ</option>
-                      <option value="Origami">Origami</option>
-                      <option value="Hario V60">Hario V60</option>
-                      <option value="Kalita Wave">Kalita Wave</option>
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 items-end">
-                    <div>
-                      <label className="text-xs font-bold text-[#8C7A6B] mb-1 block">使う豆の量</label>
-                      <div className="relative">
-                        <input 
-                          type="number" min="10" max="40" placeholder="おまかせ"
-                          className="w-full bg-[#FDFBF7] border border-[#EAE3D5] rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52] pr-8"
-                          value={recipeInput.beansWeight} onChange={e => setRecipeInput({...recipeInput, beansWeight: e.target.value})}
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#8C7A6B]">g</span>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-[#8C7A6B] mb-1 block">味の希望</label>
-                      <input 
-                        type="text" placeholder="おまかせ（例: 甘み）" 
-                        className="w-full bg-[#FDFBF7] border border-[#EAE3D5] rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]"
-                        value={recipeInput.tasteGoal} onChange={e => setRecipeInput({...recipeInput, tasteGoal: e.target.value})}
-                      />
+                    <div className="relative">
+                      <input type="number" placeholder="豆量(g): おまかせ" className="w-full bg-[#FDFBF7] border rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52] pr-8" value={recipeInput.beansWeight} onChange={e => setRecipeInput({...recipeInput, beansWeight: e.target.value})} />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#8C7A6B]">g</span>
                     </div>
                   </div>
+                  
+                  <div>
+                    <input type="text" placeholder="味の希望: おまかせ（例: 甘みを出したい）" className="w-full bg-[#FDFBF7] border rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]" value={recipeInput.tasteGoal} onChange={e => setRecipeInput({...recipeInput, tasteGoal: e.target.value})} />
+                  </div>
 
-                  <button 
-                    onClick={generateOfflineRecipe} disabled={isGenerating || !recipeInput.beans}
-                    className="w-full bg-[#3E3228] hover:bg-[#2A221B] disabled:bg-[#B8AD9E] text-white font-bold py-3 rounded-xl shadow-md transition-all flex justify-center items-center gap-2 mt-2"
-                  >
-                    <span className="w-5 h-5">{isGenerating ? <Icons.Loader2 /> : <Icons.Compass />}</span>
-                    {isGenerating ? "レシピを考案中..." : "AIにレシピを提案してもらう"}
+                  <button onClick={generateAIRecipe} disabled={isGenerating || !recipeInput.beans} className="w-full bg-[#3E3228] text-white font-bold py-3 rounded-xl shadow-md flex justify-center items-center gap-2">
+                    {isGenerating ? <Icons.Loader2 /> : <Icons.Sparkles />} {isGenerating ? "AIがレシピを考案中..." : "AIにレシピを提案してもらう"}
                   </button>
                 </div>
 
                 {suggestedRecipe && !isGenerating && (
-                  <div className="bg-white rounded-xl p-6 border border-[#EAE3D5] shadow-sm space-y-6 relative overflow-hidden">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="w-5 h-5 text-[#A67C52]"><Icons.Sparkles /></span>
-                      <h3 className="font-bold text-lg text-[#3E3228]">提案レシピ</h3>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 gap-2 bg-[#FDFBF7] p-3 rounded-lg border border-[#EAE3D5]">
-                      <div className="text-center">
-                        <div className="text-[10px] text-[#8C7A6B]">豆量</div>
-                        <div className="text-sm font-bold text-[#A67C52]">{suggestedRecipe.beansWeight}g</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-[10px] text-[#8C7A6B]">湯量</div>
-                        <div className="text-sm font-bold text-[#A67C52]">{suggestedRecipe.waterWeight}g</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-[10px] text-[#8C7A6B]">温度</div>
-                        <div className="text-sm font-bold text-[#A67C52]">{suggestedRecipe.temp}℃</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-[10px] text-[#8C7A6B]">挽き目</div>
-                        <div className="text-sm font-bold text-[#A67C52]">{suggestedRecipe.grind}</div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      <span className="text-xs bg-[#EAE3D5] text-[#4A3B32] px-2 py-1 rounded-md font-semibold">推奨: {suggestedRecipe.roast}</span>
-                      <span className="text-xs bg-[#EAE3D5] text-[#4A3B32] px-2 py-1 rounded-md font-semibold">推奨: {suggestedRecipe.dripper}</span>
+                  <div className="bg-white rounded-xl p-6 border border-[#EAE3D5] shadow-sm space-y-4">
+                    <div className="text-center pb-2 border-b border-[#EAE3D5]">
+                      <span className="text-[10px] font-bold text-[#A67C52] tracking-widest uppercase">AI Barista Recipe</span>
+                      <h3 className="font-bold text-lg text-[#3E3228]">{suggestedRecipe.methodName}</h3>
                     </div>
 
+                    <div className="grid grid-cols-4 gap-2 bg-[#FDFBF7] p-3 rounded-lg border border-[#EAE3D5]">
+                      <div className="text-center"><div className="text-[10px] text-[#8C7A6B]">豆量</div><div className="text-sm font-bold text-[#A67C52]">{suggestedRecipe.beansWeight}g</div></div>
+                      <div className="text-center"><div className="text-[10px] text-[#8C7A6B]">湯量</div><div className="text-sm font-bold text-[#A67C52]">{suggestedRecipe.waterWeight}g</div></div>
+                      <div className="text-center"><div className="text-[10px] text-[#8C7A6B]">温度</div><div className="text-sm font-bold text-[#A67C52]">{suggestedRecipe.temp}℃</div></div>
+                      <div className="text-center"><div className="text-[10px] text-[#8C7A6B]">挽き目(C3)</div><div className="text-sm font-bold text-[#A67C52]">{suggestedRecipe.grind}</div></div>
+                    </div>
+                    
+                    <button onClick={applyRecipeToRecord} className="w-full flex justify-center items-center gap-2 bg-[#A67C52]/10 text-[#A67C52] font-bold py-3 rounded-xl border border-[#A67C52]/20 active:bg-[#A67C52]/20 transition-colors">
+                      <Icons.Copy /> このレシピで抽出する
+                    </button>
+
                     <div>
-                      <h4 className="text-xs font-bold text-[#8C7A6B] mb-2 uppercase">Barista Advice</h4>
-                      <p className="text-sm leading-relaxed text-[#4A3B32] whitespace-pre-wrap">{suggestedRecipe.advice}</p>
+                      <h4 className="text-xs font-bold text-[#8C7A6B] mb-2 uppercase">Advice</h4>
+                      <p className="text-sm text-[#4A3B32]">{suggestedRecipe.advice}</p>
                     </div>
 
                     <div>
@@ -585,9 +617,7 @@
                             <div className="absolute -left-[27px] top-1 w-3 h-3 rounded-full bg-[#A67C52] ring-4 ring-white"></div>
                             <div className="flex items-baseline gap-2 mb-1">
                               <span className="font-bold text-[#3E3228] w-10">{step.time}</span>
-                              <span className="text-xs font-semibold text-[#8C7A6B] bg-[#FDFBF7] px-2 py-0.5 rounded-md border border-[#EAE3D5]">
-                                ~ {step.water}
-                              </span>
+                              <span className="text-xs font-semibold text-[#8C7A6B] bg-[#FDFBF7] px-2 py-0.5 rounded-md border border-[#EAE3D5]">~ {step.water}</span>
                             </div>
                             <div className="text-sm text-[#4A3B32]">{step.description}</div>
                           </div>
@@ -599,66 +629,159 @@
               </div>
             )}
 
-            {/* === INSIGHT TAB === */}
-            {activeTab === 'insight' && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <div className="bg-gradient-to-br from-[#A67C52] to-[#8B653F] p-6 rounded-2xl text-white shadow-md relative overflow-hidden">
-                  <span className="absolute top-4 right-4 text-white/20 w-24 h-24"><Icons.Activity /></span>
-                  <h2 className="text-sm font-bold text-white/80 uppercase tracking-widest mb-1">Data Insight</h2>
-                  <p className="text-xl font-bold mb-4 relative z-10">最新の抽出分析</p>
-                  
-                  {logs.length > 0 ? (
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20 relative z-10">
-                      <div className="text-xs text-white/80 mb-2">Target: {logs[0].beans} ({logs[0].date})</div>
-                      <h3 className="font-bold text-lg mb-2">{generateAIFeedback(logs[0]).title}</h3>
-                      <p className="text-sm leading-relaxed text-white/90">
-                        {generateAIFeedback(logs[0]).message}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-sm relative z-10">記録がありません。</p>
-                  )}
+            {/* === HISTORY TAB === */}
+            {activeTab === 'history' && (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                <div className="flex justify-between items-center mb-4 bg-white p-3 rounded-xl border border-[#EAE3D5]">
+                  <span className="text-sm font-bold text-[#8C7A6B]">全 {logs.length} 件</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => fileInputRef.current.click()} className="flex items-center gap-1 text-xs bg-[#FDFBF7] border border-[#EAE3D5] px-3 py-2 rounded-lg text-[#4A3B32]"><Icons.Upload /> 読込</button>
+                    <input type="file" accept=".csv" ref={fileInputRef} onChange={handleImportCSV} hidden />
+                    <button onClick={handleExportCSV} className="flex items-center gap-1 text-xs bg-[#A67C52] text-white px-3 py-2 rounded-lg"><Icons.Download /> 書出</button>
+                  </div>
                 </div>
 
-                <section className="space-y-4 mt-8">
-                  <h2 className="text-sm font-bold text-[#8C7A6B] uppercase tracking-widest border-b border-[#EAE3D5] pb-2">Your Best Profiles</h2>
-                  {logs.filter(l => l.score >= 4.5).length === 0 ? <p className="text-sm text-[#8C7A6B]">スコア4.5以上の記録がまだありません。</p> : 
-                   logs.filter(l => l.score >= 4.5).map(bestLog => (
-                    <div key={`best-${bestLog.id}`} className="bg-white p-4 rounded-xl border-l-4 border-[#A67C52] shadow-sm mb-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <span className="font-bold text-[#3E3228] block">{bestLog.beans}</span>
-                          <span className="text-[10px] text-[#8C7A6B]">{bestLog.roastery}</span>
+                <div className="bg-white p-3 rounded-xl border border-[#EAE3D5] mb-4 space-y-3 shadow-sm">
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-[#8C7A6B]"><Icons.Search /></div>
+                    <input type="text" placeholder="豆の種類、ロースタリー、メモで検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-[#FDFBF7] border border-[#EAE3D5] rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]" />
+                  </div>
+                  <div className="flex gap-2">
+                    <select value={sortOption} onChange={(e) => setSortOption(e.target.value)} className="flex-1 bg-[#FDFBF7] border border-[#EAE3D5] rounded-lg p-2 text-sm text-[#4A3B32]">
+                      <option value="date-desc">新しい順</option><option value="date-asc">古い順</option><option value="score-desc">評価が高い順</option><option value="score-asc">評価が低い順</option>
+                    </select>
+                    <select value={filterDripper} onChange={(e) => setFilterDripper(e.target.value)} className="flex-1 bg-[#FDFBF7] border border-[#EAE3D5] rounded-lg p-2 text-sm text-[#4A3B32]">
+                      <option value="all">全ドリッパー</option><option value="Origami">Origami</option><option value="Hario V60">Hario V60</option><option value="Kalita Wave">Kalita Wave</option>
+                    </select>
+                  </div>
+                </div>
+                
+                {filteredAndSortedLogs.length === 0 ? <p className="text-center text-[#8C7A6B] py-10">条件に一致する記録がありません</p> : filteredAndSortedLogs.map((log) => {
+                  const isExpanded = expandedIds.includes(log.id);
+                  const isEditing = editingLogId === log.id;
+
+                  if (isEditing) {
+                    return (
+                      <div key={log.id} className="bg-white p-4 rounded-xl border-2 border-[#A67C52] shadow-md space-y-4">
+                        <div className="flex justify-between"><span className="text-xs font-bold text-[#A67C52]">編集モード</span></div>
+                        <input type="text" value={editFormData.beans} onChange={e=>setEditFormData({...editFormData, beans: e.target.value})} className="w-full border p-2 rounded" placeholder="豆の名前"/>
+                        <div className="grid grid-cols-4 gap-2">
+                          <div><span className="text-[10px]">豆量</span><input type="number" value={editFormData.beansWeight} onChange={e=>setEditFormData({...editFormData, beansWeight: parseInt(e.target.value)})} className="w-full border p-1 rounded text-sm"/></div>
+                          <div><span className="text-[10px]">湯量</span><input type="number" value={editFormData.waterWeight} onChange={e=>setEditFormData({...editFormData, waterWeight: parseInt(e.target.value)})} className="w-full border p-1 rounded text-sm"/></div>
+                          <div><span className="text-[10px]">温度</span><input type="number" value={editFormData.temp} onChange={e=>setEditFormData({...editFormData, temp: parseInt(e.target.value)})} className="w-full border p-1 rounded text-sm"/></div>
+                          <div><span className="text-[10px]">挽き目</span><input type="number" value={editFormData.grind} onChange={e=>setEditFormData({...editFormData, grind: parseInt(e.target.value)})} className="w-full border p-1 rounded text-sm"/></div>
                         </div>
-                        <span className="text-[#A67C52] font-bold flex items-center gap-1 bg-[#FDFBF7] px-2 py-1 rounded-md border border-[#EAE3D5]">
-                          <span className="w-3 h-3 text-yellow-500"><Icons.Star /></span> {bestLog.score}
-                        </span>
+                        <div><span className="text-[10px]">評価スコア</span><input type="range" min="1" max="5" step="0.1" value={editFormData.score} onChange={e=>setEditFormData({...editFormData, score: parseFloat(e.target.value)})} className="w-full"/></div>
+                        <textarea value={editFormData.memo} onChange={e=>setEditFormData({...editFormData, memo: e.target.value})} className="w-full border p-2 rounded text-sm" rows="2"></textarea>
+                        <div className="flex gap-2">
+                          <button onClick={handleEditCancel} className="w-1/2 py-2 border rounded-lg">キャンセル</button>
+                          <button onClick={handleEditSave} className="w-1/2 py-2 bg-[#A67C52] text-white rounded-lg">保存</button>
+                        </div>
                       </div>
-                      <div className="text-xs text-[#8C7A6B] mt-3 bg-[#FDFBF7] p-2 rounded-lg border border-[#EAE3D5]">
-                        {bestLog.dripper} / {bestLog.filter} / 挽き目{bestLog.grind} / {bestLog.temp}℃ / {bestLog.beansWeight}g:{bestLog.waterWeight}g
+                    );
+                  }
+
+                  const shortBeansName = log.beans.length > 10 ? log.beans.substring(0, 10) + '...' : log.beans;
+
+                  return (
+                    <SwipeToDelete key={log.id} onDelete={() => handleDeleteLog(log.id)}>
+                      <div className="p-4" onClick={() => setExpandedIds(prev => prev.includes(log.id) ? prev.filter(e=>e!==log.id) : [...prev, log.id])}>
+                        <div className="flex justify-between items-center">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-bold text-lg leading-tight truncate" title={log.beans}>{shortBeansName}</h3>
+                              <span className="text-xs bg-[#FDFBF7] px-2 py-0.5 rounded text-[#8C7A6B] border border-[#EAE3D5]">{log.roast}</span>
+                            </div>
+                            <div className="text-sm font-semibold text-[#A67C52] mt-1 flex items-center gap-1">
+                               <Icons.Sparkles /> {log.summary || '要約中...'}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                             <div className="flex items-center gap-1 text-yellow-500 font-bold"><Icons.Star />{log.score.toFixed(1)}</div>
+                             <div className="text-gray-400">{isExpanded ? <Icons.ChevronUp/> : <Icons.ChevronDown/>}</div>
+                          </div>
+                        </div>
+                        
+                        {isExpanded && (
+                          <div className="mt-4 pt-4 border-t border-[#EAE3D5] animate-in fade-in slide-in-from-top-2">
+                            <div className="text-xs text-[#8C7A6B] mb-2">{log.date} {log.time} / {log.roastery}</div>
+                            <div className="grid grid-cols-4 gap-2 mb-3 bg-[#FDFBF7] p-2 rounded-lg border border-[#EAE3D5]">
+                              <div className="text-center"><div className="text-[10px] text-[#8C7A6B]">Ratio</div><div className="text-xs font-semibold">1:{Math.round(log.waterWeight/log.beansWeight)}</div></div>
+                              <div className="text-center"><div className="text-[10px] text-[#8C7A6B]">Temp</div><div className="text-xs font-semibold">{log.temp}℃</div></div>
+                              <div className="text-center"><div className="text-[10px] text-[#8C7A6B]">Grind</div><div className="text-xs font-semibold">{log.grind}</div></div>
+                              <div className="text-center"><div className="text-[10px] text-[#8C7A6B]">Filter</div><div className="text-xs font-semibold truncate">{log.filter}</div></div>
+                            </div>
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              <span className="text-[10px] bg-[#EAE3D5] px-2 py-0.5 rounded-md">{log.dripper}</span>
+                              {log.flavors && log.flavors.map(f => <span key={f} className="text-[10px] bg-white border border-[#EAE3D5] text-[#A67C52] px-2 py-0.5 rounded-full">{f}</span>)}
+                            </div>
+                            <div className="text-sm text-[#4A3B32] bg-white p-3 rounded-lg border border-[#EAE3D5] mb-3">"{log.memo}"</div>
+                            <button onClick={(e) => { e.stopPropagation(); handleEditStart(log); }} className="w-full flex justify-center items-center gap-1 py-2 text-sm text-[#A67C52] border border-[#A67C52] rounded-lg">
+                              <Icons.Edit /> 記録を編集する
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      <div className="text-xs mt-2 text-right italic">"{bestLog.memo}"</div>
-                    </div>
-                  ))}
-                </section>
+                    </SwipeToDelete>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* === INSIGHT TAB === */}
+            {activeTab === 'insight' && (
+              <div className="space-y-6 animate-in fade-in duration-300 flex flex-col h-full">
+                <div className="bg-gradient-to-br from-[#3E3228] to-[#2A221B] p-5 rounded-2xl text-white shadow-md relative overflow-hidden flex-shrink-0">
+                  <span className="absolute top-4 right-4 text-white/10 w-24 h-24"><Icons.Activity /></span>
+                  <h2 className="text-xs font-bold text-white/60 uppercase tracking-widest mb-1 flex items-center gap-1">
+                    <Icons.Sparkles /> Data Insight Report
+                  </h2>
+                  <div className="mt-3 bg-white/10 backdrop-blur-sm rounded-xl p-4 text-sm leading-relaxed border border-white/10 relative z-10 min-h-[100px]">
+                    {insightReport ? insightReport : <div className="flex items-center gap-2 text-white/70"><Icons.Loader2 /> 分析をリクエスト中...</div>}
+                  </div>
+                </div>
+
+                <div className="flex-1 flex flex-col bg-white rounded-2xl border border-[#EAE3D5] shadow-sm overflow-hidden mb-4">
+                  <div className="bg-[#FDFBF7] px-4 py-3 border-b border-[#EAE3D5] flex-shrink-0">
+                    <h3 className="text-sm font-bold text-[#8C7A6B]">AI Barista QA</h3>
+                    <p className="text-[10px] text-[#A67C52]">あなたの過去のデータを基にアドバイスします</p>
+                  </div>
+                  
+                  <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-white min-h-[250px]">
+                    {chatMessages.map((msg, i) => (
+                      <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-[#A67C52] text-white rounded-tr-sm' : 'bg-[#FDFBF7] text-[#4A3B32] border border-[#EAE3D5] rounded-tl-sm'}`}>
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                    {isChatting && (
+                      <div className="flex justify-start">
+                        <div className="max-w-[80%] p-3 rounded-2xl text-sm bg-[#FDFBF7] text-[#4A3B32] border border-[#EAE3D5] rounded-tl-sm flex gap-1 items-center">
+                           <div className="w-1.5 h-1.5 bg-[#A67C52] rounded-full animate-bounce"></div>
+                           <div className="w-1.5 h-1.5 bg-[#A67C52] rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                           <div className="w-1.5 h-1.5 bg-[#A67C52] rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
+
+                  <form onSubmit={handleChatSubmit} className="p-3 bg-[#FDFBF7] border-t border-[#EAE3D5] flex gap-2 flex-shrink-0">
+                    <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="酸味を抑えるには？" className="flex-1 bg-white border border-[#EAE3D5] rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#A67C52]" />
+                    <button type="submit" disabled={!chatInput.trim() || isChatting} className="bg-[#A67C52] text-white p-2 w-10 h-10 rounded-full flex justify-center items-center disabled:opacity-50"><Icons.Send /></button>
+                  </form>
+                </div>
               </div>
             )}
           </main>
 
-          <nav className="fixed bottom-0 w-full max-w-md bg-white border-t border-[#EAE3D5] pb-safe z-20">
+          <nav className="fixed bottom-0 w-full max-w-md bg-white border-t border-[#EAE3D5] pb-safe z-30 flex-shrink-0">
             <div className="flex justify-between items-center px-4 py-3">
-              <button onClick={() => setActiveTab('record')} className={`flex flex-col items-center gap-1 transition-colors w-1/4 ${activeTab === 'record' ? 'text-[#A67C52]' : 'text-[#B8AD9E]'}`}>
-                <span className="w-6 h-6"><Icons.Plus /></span><span className="text-[10px] font-bold">Record</span>
-              </button>
-              <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center gap-1 transition-colors w-1/4 ${activeTab === 'history' ? 'text-[#A67C52]' : 'text-[#B8AD9E]'}`}>
-                <span className="w-6 h-6"><Icons.List /></span><span className="text-[10px] font-bold">History</span>
-              </button>
-              <button onClick={() => setActiveTab('recipe')} className={`flex flex-col items-center gap-1 transition-colors w-1/4 ${activeTab === 'recipe' ? 'text-[#A67C52]' : 'text-[#B8AD9E]'}`}>
-                <span className="w-6 h-6"><Icons.Compass /></span><span className="text-[10px] font-bold">Recipe</span>
-              </button>
-              <button onClick={() => setActiveTab('insight')} className={`flex flex-col items-center gap-1 transition-colors w-1/4 ${activeTab === 'insight' ? 'text-[#A67C52]' : 'text-[#B8AD9E]'}`}>
-                <span className="w-6 h-6"><Icons.Sparkles /></span><span className="text-[10px] font-bold">Insight</span>
-              </button>
+              <button onClick={() => setActiveTab('record')} className={`flex flex-col items-center gap-1 w-1/4 ${activeTab === 'record' ? 'text-[#A67C52]' : 'text-[#B8AD9E]'}`}><Icons.Plus /><span className="text-[10px] font-bold">Record</span></button>
+              <button onClick={() => setActiveTab('recipe')} className={`flex flex-col items-center gap-1 w-1/4 ${activeTab === 'recipe' ? 'text-[#A67C52]' : 'text-[#B8AD9E]'}`}><Icons.Compass /><span className="text-[10px] font-bold">Recipe</span></button>
+              <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center gap-1 w-1/4 ${activeTab === 'history' ? 'text-[#A67C52]' : 'text-[#B8AD9E]'}`}><Icons.List /><span className="text-[10px] font-bold">History</span></button>
+              <button onClick={() => setActiveTab('insight')} className={`flex flex-col items-center gap-1 w-1/4 ${activeTab === 'insight' ? 'text-[#A67C52]' : 'text-[#B8AD9E]'}`}><Icons.Sparkles /><span className="text-[10px] font-bold">Insight</span></button>
             </div>
           </nav>
         </div>
